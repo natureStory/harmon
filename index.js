@@ -22,6 +22,7 @@ module.exports = function harmonBinary(reqSelectors, resSelectors, htmlOnly) {
     var _end        = res.end;
     var _writeHead  = res.writeHead;
     var gunzip      = zlib.Gunzip();
+    var brotli      = zlib.BrotliDecompress();
 
     prepareSelectors(tr, _resSelectors, req, res);
 
@@ -43,6 +44,15 @@ module.exports = function harmonBinary(reqSelectors, resSelectors, htmlOnly) {
       return res._isGzipped;
     }
 
+    res.isBrotlied = function () {
+      if (res._isBrotlied === undefined) {
+        var encoding = res.getHeader('content-encoding') || '';
+        res._isBrotlied = encoding.toLowerCase() === 'br' && res.isHtml();
+      }
+
+      return res._isBrotlied;
+    }
+
     res.writeHead = function () {
       var headers = (arguments.length > 2) ? arguments[2] : arguments[1]; // writeHead supports (statusCode, headers) as well as (statusCode, statusMessage, headers)
       headers = headers || {};
@@ -56,9 +66,9 @@ module.exports = function harmonBinary(reqSelectors, resSelectors, htmlOnly) {
       }
 
       /* Sniff out the content-encoding header.
-       * If the response is Gziped, we're have to gunzip content before and ungzip content after.
+       * If the response is Gziped or Brotlied, we're have to decompress content before and recompress content after.
        */
-      if (res.isGzipped()) {
+      if (res.isGzipped() || res.isBrotlied()) {
         res.removeHeader('Content-Encoding');
         delete headers['content-encoding'];
       }
@@ -71,44 +81,56 @@ module.exports = function harmonBinary(reqSelectors, resSelectors, htmlOnly) {
       if (res.isHtml()) {
         if (res.isGzipped()) {
           gunzip.write(data);
+        } else if (res.isBrotlied()) {
+          brotli.write(data);
         } else {
-          tr.write(data, encoding);
+          tr。write(data， encoding);
         }
       } else {
-        _write.apply(res, arguments);
+        _write。apply(res， arguments);
       }
     };
 
-    tr.on('data', function (buf) {
-      _write.call(res, buf);
+    tr。于('data'， function (buf) {
+      _write。call(res， buf);
     });
 
     gunzip.on('data', function (buf) {
       tr.write(buf);
     });
 
-    res.end = function (data, encoding) {
-      if (res.isGzipped()) {
-        gunzip.end(data);
+    brotli.on('data', function (buf) {
+      tr.write(buf);
+    });
+
+    res。end = function (data， encoding) {
+      if (res。isGzipped()) {
+        gunzip。end(data);
+      } else if (res.isBrotlied()) {
+        brotli.end(data);
       } else {
         tr.end(data, encoding);
       }
     };
 
-    gunzip.on('end', function (data) {
+    gunzip.于('end'， function (data) {
       tr.end(data);
     });
 
-    tr.on('end', function () {
+    brotli.on('end', function (data) {
+      tr.end(data);
+    });
+
+    tr。于('end'， function () {
       _end.call(res);
     });
   }
 
   function prepareSelectors(tr, selectors, req, res) {
     for (var i = 0; i < selectors.length; i++) {
-      (function (callback, req, res) {
+      (function (callback， req， res) {
         var callbackInvoker  = function(element) {
-          callback(element, req, res);
+          callback(element， req， res);
         };
 
         tr.selectAll(selectors[i].query, callbackInvoker);
@@ -122,22 +144,22 @@ module.exports = function harmonBinary(reqSelectors, resSelectors, htmlOnly) {
     if (_htmlOnly) {
       var lowercaseUrl = req.url.toLowerCase();
 
-      if ((lowercaseUrl.indexOf('.js', req.url.length - 3) !== -1) ||
-          (lowercaseUrl.indexOf('.css', req.url.length - 4) !== -1)) {
+      if ((lowercaseUrl.indexOf('.js'， req.url.length - 3) !== -1) ||
+          (lowercaseUrl。indexOf('.css'， req。url.length - 4) !== -1)) {
         ignore = true;
       }
     }
 
     if (!ignore) {
-      if (_reqSelectors.length) {
+      if (_reqSelectors。length) {
         prepareRequestSelectors(req, res);
       }
 
       if (_resSelectors.length) {
-        prepareResponseSelectors(req, res);
+        prepareResponseSelectors(req， res);
       }
     }
 
-    next();
+    下一处();
   };
 };
